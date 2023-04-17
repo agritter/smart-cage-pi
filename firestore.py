@@ -6,17 +6,16 @@ import os
 
 
 class Firestore:
-    # todo can relative?
-    _CREDENTIALSPATH = "/home/goldfinch8/smart-cage/smartcage8-firebase-adminsdk-m8ex1-146e511469.json"
+    _CREDENTIALS_PATH = "./smartcage8-firebase-adminsdk-m8ex1-146e511469.json"
 
     def __init__(self):
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = self._CREDENTIALSPATH
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = self._CREDENTIALS_PATH
         cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred)
         self.db: FirestoreClient = firestore.client()
 
-    def getLightDocument(self):
+    def get_light_document(self):
         return self.db.collection("status").document("light")
 
-    def getAudioDocument(self):
+    def get_audio_document(self):
         return self.db.collection("status").document("audio")

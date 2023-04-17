@@ -7,25 +7,26 @@ import pigpio
 import time
 
 
-LED = 16
-AUDIOSWITCH = 24
-LIGHTSWITCH = 23
+LED_PIN = 16
+AUDIO_SWITCH_PIN = 24
+LIGHT_SWITCH_PIN = 23
 
 pi = pigpio.pi()
 
-audioSwitch = Switch(pi, AUDIOSWITCH)
-lightSwitch = Switch(pi, LIGHTSWITCH)
-light = Light(pi, LED)
+audio_switch = Switch(pi, AUDIO_SWITCH_PIN)
+light_switch = Switch(pi, LIGHT_SWITCH_PIN)
+light = Light(pi, LED_PIN)
 firestore = Firestore()
-lightController = LightController(lightSwitch, light, firestore)
-audioController = AudioController(audioSwitch, firestore)
+light_controller = LightController(light_switch, light, firestore)
+audio_controller = AudioController(audio_switch, firestore)
 
 try:
     while True:
         time.sleep(1)
-        audioController.handler()
+        audio_controller.handler()
 except KeyboardInterrupt:
-    lightController.cleanup()
-    audioSwitch.cleanup()
-    lightSwitch.cleanup()
+    light_controller.cleanup()
+    audio_controller.cleanup()
+    audio_switch.cleanup()
+    light_switch.cleanup()
     pi.stop()
