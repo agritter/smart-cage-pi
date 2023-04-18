@@ -1,3 +1,5 @@
 smartcage8-firebase-adminsdk*.json
 __pycache__
 audio
+temp
+.vscode
