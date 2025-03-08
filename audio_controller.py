@@ -3,13 +3,8 @@ from switch_controller_with_modes import SwitchControllerWithModes
 from switch import Switch
 import random
 import os
-import warnings
-# hide pygame's welcome message
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-with warnings.catch_warnings():
-    # prevent warning about "neon capabilities"
-    warnings.simplefilter("ignore")
-    from pygame import mixer
+import miniaudio
+import alsaaudio
 
 
 class AudioController(SwitchControllerWithModes):
@@ -17,6 +12,12 @@ class AudioController(SwitchControllerWithModes):
     _VOLUME_KEY = "volume"
     _AUDIO_DIRECTORY = "./audio"
     _VOLUME_TOLERANCE = 0.01
+
+    _AUDIO_TYPE_KEY = "type"
+    _AUDIO_TYPE_BUDGIES = "budgies"
+    _AUDIO_TYPE_80S = "eighties"
+    _AUDIO_TYPE_LATIN = "latin"
+    _AUDIO_TYPE_JAZZ = "jazz"
 
     def __init__(self, switch: Switch, firestore: Firestore):
         """
@@ -26,7 +27,12 @@ class AudioController(SwitchControllerWithModes):
         # Get the paths of the files in the audio directory
         self._audio_files = list(map(lambda file: os.path.join(
             self._AUDIO_DIRECTORY, file), os.listdir(self._AUDIO_DIRECTORY)))
-        mixer.init()
+        self._device = miniaudio.PlaybackDevice()
+
+        self._mixer = alsaaudio.Mixer()
+
+        self._audio_type = self._AUDIO_TYPE_BUDGIES
+
         super().__init__(switch, "audio")
 
     def _get_firestore_document(self):
@@ -41,12 +47,19 @@ class AudioController(SwitchControllerWithModes):
             Handles any change to the audio document
         """
         # Set the volume if it changed
-        volume = document_snapshot[0].get(self._VOLUME_KEY) / 100
-        # Check if the volume is close to the actual volume
-        # (the volume is set to a value slightly different than the volume given)
-        if abs(volume - mixer.music.get_volume()) > self._VOLUME_TOLERANCE:
+        volume = document_snapshot[0].get(self._VOLUME_KEY)
+        if (volume != self._mixer.getvolume()[0]):
             print(f"Setting volume to {volume}")
-            mixer.music.set_volume(volume)
+            self._mixer.setvolume(volume)
+
+        # Change the audio type if changed
+        audio_type = document_snapshot[0].get(self._AUDIO_TYPE_KEY)
+        if audio_type != self._audio_type:
+            print(f"Setting audio type to {audio_type}")
+            self._audio_type = audio_type
+            if self._is_on:
+                self._device.stop()
+                self._start_stream()
 
         # The super class handles playing/pausing the audio
         super()._on_firestore_change(document_snapshot, changes, read_time)
@@ -57,42 +70,50 @@ class AudioController(SwitchControllerWithModes):
             Overrides the super class
         """
         if is_on:
-            mixer.music.unpause()
+            self._start_stream()
         else:
-            mixer.music.pause()
+            self._device.stop()
 
-    def _load_random_audio(self):
-        """
-            Loads a new audio file chosen at random from the audio folder
-        """
-        file = random.choice(self._audio_files)
+    def _start_stream(self):
+        try:
+            if self._audio_type == self._AUDIO_TYPE_80S:
+                stream = self._icecast_stream(
+                    "https://stream.mybroadbandradio.com/80srhythmhq")
+            elif self._audio_type == self._AUDIO_TYPE_LATIN:
+                stream = self._icecast_stream(
+                    "http://s37.derstream.net/latinofm.mp3")
+            elif self._audio_type == self._AUDIO_TYPE_JAZZ:
+                stream = self._icecast_stream(
+                    "http://relay.publicdomainradio.org/jazz_swing.mp3")
+            else:  # self._AUDIO_TYPE_BUDGIES
+                stream = self._random_local_audio_stream()
+                next(stream)
 
-        print("Loading new audio file:", file)
-        mixer.music.load(file)
-        mixer.music.play()
-        if not self._is_on:
-            mixer.music.pause()
+            self._device.start(stream)
+        except:
+            print("Problem starting stream")
+            self._set_output_is_on(False)
 
-    def _handle_audio_finished(self):
-        """
-            Checks if the current audio file has finished and loads another if it has
-        """
-        if not mixer.music.get_busy() and self._is_on:
-            print("Current audio file finished.")
-            mixer.music.stop()
-            mixer.music.unload()
-            self._load_random_audio()
+    def _random_local_audio_stream(self):
+        while True:
+            file = random.choice(self._audio_files)
+            print("Playing new audio file:", file)
+            stream = miniaudio.stream_file(file)
 
-    def handler(self):
-        """
-            Should be called periodically to handle any periodic processing
-            by the audio handler
-        """
-        self._handle_audio_finished()
+            frame_count = yield b""
+            try:
+                while True:
+                    yield stream.send(frame_count)
+            except StopIteration:
+                pass
+
+    def _icecast_stream(self, url):
+        icecast = miniaudio.IceCastClient(url)
+        return miniaudio.stream_any(icecast, icecast.audio_format)
 
     def cleanup(self):
         """
             Cleans up the resources used by the controller
         """
         super().cleanup()
-        mixer.quit()
+        self._device.close()

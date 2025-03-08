@@ -4,12 +4,12 @@ from light import Light
 from light_controller import LightController
 from switch import Switch
 import pigpio
-import time
+import signal
 
 # Constants
 LED_PIN = 16
-AUDIO_SWITCH_PIN = 24
-LIGHT_SWITCH_PIN = 23
+AUDIO_SWITCH_PIN = 23
+LIGHT_SWITCH_PIN = 24
 
 pi = pigpio.pi()
 audio_switch = Switch(pi, AUDIO_SWITCH_PIN)
@@ -20,11 +20,7 @@ light_controller = LightController(light_switch, light, firestore)
 audio_controller = AudioController(audio_switch, firestore)
 
 try:
-    while True:
-        # Only handled periodically since loading a new song doesn't need to be instantaneous
-        audio_controller.handler()
-        # All other actions handled through callbacks
-        time.sleep(1)
+    signal.pause()
 except KeyboardInterrupt:
     light_controller.cleanup()
     audio_controller.cleanup()
